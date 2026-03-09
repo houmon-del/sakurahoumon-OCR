@@ -16,16 +16,21 @@ RUN pip install --no-cache-dir \
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
+# Pre-download all 4 yomitoku AI models into the image
+RUN python -m yomitoku.cli.download_model
+
 # Copy application code
 COPY . .
 
 # Create uploads directory
 RUN mkdir -p uploads
 
-# PyTorch thread control (prevent SIGABRT on Cloud Run)
+# Thread control (prevent SIGABRT on Cloud Run)
 ENV OMP_NUM_THREADS=2
 ENV MKL_NUM_THREADS=2
 ENV TORCH_NUM_THREADS=2
+ENV ORT_NUM_THREADS=2
+ENV ONNXRUNTIME_NUM_THREADS=2
 ENV PYTHONUNBUFFERED=1
 
 # Cloud Run sets PORT env var (default 8080)
