@@ -6,6 +6,7 @@ WORKDIR /app
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libgl1 \
     libglib2.0-0 \
+    libgomp1 \
     && rm -rf /var/lib/apt/lists/*
 
 # Install PyTorch CPU-only first (smaller than GPU version)
@@ -31,6 +32,7 @@ ENV MKL_NUM_THREADS=2
 ENV TORCH_NUM_THREADS=2
 ENV ORT_NUM_THREADS=2
 ENV ONNXRUNTIME_NUM_THREADS=2
+ENV OPENBLAS_NUM_THREADS=2
 ENV PYTHONUNBUFFERED=1
 
 # Cloud Run sets PORT env var (default 8080)
