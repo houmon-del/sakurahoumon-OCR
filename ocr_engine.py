@@ -1,3 +1,6 @@
+import faulthandler
+faulthandler.enable()
+
 import threading
 import uuid
 import time
