@@ -2,6 +2,12 @@ FROM python:3.11
 
 WORKDIR /app
 
+# System dependencies (OpenCV needs libGL, PyTorch needs libgomp)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libgl1 \
+    libglib2.0-0 \
+    && rm -rf /var/lib/apt/lists/*
+
 # Install PyTorch CPU-only first (smaller than GPU version)
 RUN pip install --no-cache-dir \
     torch torchvision --index-url https://download.pytorch.org/whl/cpu
