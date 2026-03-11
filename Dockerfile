@@ -1,16 +1,12 @@
-FROM python:3.11
+FROM pytorch/pytorch:2.6.0-cuda12.6-cudnn9-runtime
 
 WORKDIR /app
 
-# System dependencies (OpenCV needs libGL, PyTorch needs libgomp)
+# System dependencies (OpenCV needs libGL)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libgl1 \
     libglib2.0-0 \
     && rm -rf /var/lib/apt/lists/*
-
-# Install PyTorch CPU-only first (smaller than GPU version)
-RUN pip install --no-cache-dir \
-    torch torchvision --index-url https://download.pytorch.org/whl/cpu
 
 # Install dependencies
 COPY requirements.txt .
@@ -25,13 +21,6 @@ COPY . .
 # Create uploads directory
 RUN mkdir -p uploads
 
-# Thread control — match CPU count (4 vCPU on Cloud Run)
-ENV OMP_NUM_THREADS=4
-ENV MKL_NUM_THREADS=4
-ENV TORCH_NUM_THREADS=4
-ENV ORT_NUM_THREADS=4
-ENV ONNXRUNTIME_NUM_THREADS=4
-ENV OPENBLAS_NUM_THREADS=4
 ENV PYTHONUNBUFFERED=1
 
 # Cloud Run sets PORT env var (default 8080)

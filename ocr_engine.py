@@ -33,7 +33,7 @@ def get_analyzer():
         _analyzer_loading = True
         from yomitoku import DocumentAnalyzer
         _analyzer = DocumentAnalyzer(
-            device="cpu",
+            device="cuda",
             configs={
                 "ocr": {
                     "text_detector": {"infer_onnx": False},
