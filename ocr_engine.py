@@ -36,12 +36,12 @@ def get_analyzer():
             device="cpu",
             configs={
                 "ocr": {
-                    "text_detector": {"infer_onnx": True},
-                    "text_recognizer": {"infer_onnx": True},
+                    "text_detector": {"infer_onnx": False},
+                    "text_recognizer": {"infer_onnx": False},
                 },
                 "layout_analyzer": {
-                    "layout_parser": {"infer_onnx": True},
-                    "table_structure_recognizer": {"infer_onnx": True},
+                    "layout_parser": {"infer_onnx": False},
+                    "table_structure_recognizer": {"infer_onnx": False},
                 },
             },
         )
