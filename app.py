@@ -31,6 +31,15 @@ app.config["MAX_CONTENT_LENGTH"] = 50 * 1024 * 1024  # 50MB
 
 os.makedirs(app.config["UPLOAD_FOLDER"], exist_ok=True)
 
+# Warm up OCR model in background so first request doesn't block
+import threading as _threading
+def _warmup():
+    try:
+        ocr_engine.get_analyzer()
+    except Exception as e:
+        print(f"[warmup] OCRモデルのロード失敗: {e}")
+_threading.Thread(target=_warmup, daemon=True).start()
+
 ALLOWED_EXTENSIONS = {"pdf", "png", "jpg", "jpeg", "tif", "tiff"}
 
 
@@ -40,7 +49,7 @@ def allowed_file(filename):
 
 @app.route("/health")
 def health():
-    return jsonify({"status": "ok"})
+    return jsonify({"status": "ok", "model_ready": ocr_engine._analyzer is not None})
 
 
 @app.route("/")
