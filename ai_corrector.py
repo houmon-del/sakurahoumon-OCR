@@ -453,10 +453,22 @@ SYSTEM_PROMPT_CONSULTATION = """\
 """
 
 
-def extract_consultation_structured(page_data, page_image_base64=None):
-    """相談シート専用の構造化抽出（Vision API使用）"""
+def extract_consultation_structured(pages_data, page_images_base64=None):
+    """相談シート専用の構造化抽出（全ページ対応・Vision API使用）"""
     client = get_client()
-    ocr_text = _build_ocr_text(page_data)
+
+    # 単一ページ dict の後方互換対応
+    if isinstance(pages_data, dict):
+        pages_data = [pages_data]
+    if isinstance(page_images_base64, str):
+        page_images_base64 = [page_images_base64]
+
+    # 全ページのOCRテキストを結合
+    if len(pages_data) == 1:
+        ocr_text = _build_ocr_text(pages_data[0])
+    else:
+        parts = [f"--- ページ{i+1} ---\n{_build_ocr_text(p)}" for i, p in enumerate(pages_data)]
+        ocr_text = "\n\n".join(parts)
 
     user_text = (
         "以下は「訪問歯科診療相談シート」のOCRテキストです。\n"
@@ -467,13 +479,13 @@ def extract_consultation_structured(page_data, page_image_base64=None):
     )
 
     content = []
-    if page_image_base64:
+    for img_b64 in (page_images_base64 or []):
         content.append({
             "type": "image",
             "source": {
                 "type": "base64",
                 "media_type": "image/jpeg",
-                "data": page_image_base64,
+                "data": img_b64,
             },
         })
     content.append({"type": "text", "text": user_text})

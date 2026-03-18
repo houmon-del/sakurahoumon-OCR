@@ -92,7 +92,7 @@ def _run_ocr(job_id):
         # Load file
         if ext == "pdf":
             from yomitoku.data.functions import load_pdf
-            pages = load_pdf(file_path, dpi=200)
+            pages = load_pdf(file_path, dpi=300)
         else:
             from yomitoku.data.functions import load_image
             pages = load_image(file_path)

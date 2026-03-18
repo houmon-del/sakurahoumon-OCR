@@ -543,16 +543,15 @@ def consultation_ai_analyze(batch_id):
 
     try:
         import base64
-        # Use first page (consultation sheets are typically 1-2 pages)
-        page_idx = 0
-        page_image_base64 = None
-        if page_idx < len(job.get("images", [])):
+        # 全ページの画像を収集
+        page_images_base64 = []
+        for page_idx in range(len(job["results"])):
             buf = ocr_engine.get_page_image_jpeg(job_id, page_idx)
             if buf:
-                page_image_base64 = base64.b64encode(buf.read()).decode("ascii")
+                page_images_base64.append(base64.b64encode(buf.read()).decode("ascii"))
 
         structured = ai_corrector.extract_consultation_structured(
-            job["results"][page_idx], page_image_base64
+            job["results"], page_images_base64
         )
 
         # Save structured data to batch

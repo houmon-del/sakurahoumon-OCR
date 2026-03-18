@@ -1,4 +1,6 @@
 let selectedJobId = null;
+let currentImgPage = 0;
+let currentImgPageCount = 0;
 
 document.addEventListener('DOMContentLoaded', () => {
     renderSidebar();
@@ -7,12 +9,31 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('export-csv-btn').addEventListener('click', () => {
         window.location.href = `/consultation/${BATCH_ID}/export-csv`;
     });
+    document.getElementById('img-prev').addEventListener('click', () => showImage(currentImgPage - 1));
+    document.getElementById('img-next').addEventListener('click', () => showImage(currentImgPage + 1));
 
     // Auto-select first patient
     if (JOBS_DATA.length > 0) {
         selectPatient(JOBS_DATA[0].job_id);
     }
 });
+
+function showImage(pageIdx) {
+    if (!selectedJobId) return;
+    currentImgPage = pageIdx;
+    const inner = document.querySelector('#image-panel .image-panel-inner');
+    inner.innerHTML = `<img src="/image/${selectedJobId}/${pageIdx}" alt="Page ${pageIdx + 1}">`;
+    document.getElementById('img-indicator').textContent = `${pageIdx + 1} / ${currentImgPageCount}`;
+    document.getElementById('img-prev').disabled = (pageIdx === 0);
+    document.getElementById('img-next').disabled = (pageIdx >= currentImgPageCount - 1);
+}
+
+function updateImagePanel(jobId) {
+    const job = JOBS_DATA.find(j => j.job_id === jobId);
+    currentImgPageCount = job ? job.page_count : 1;
+    currentImgPage = 0;
+    showImage(0);
+}
 
 
 function renderSidebar() {
@@ -51,17 +72,17 @@ function selectPatient(jobId) {
         el.classList.toggle('active', el.dataset.job === jobId);
     });
 
+    // 画像パネルを更新
+    updateImagePanel(jobId);
+
     const content = document.getElementById('main-content');
     const struct = STRUCTURED_CACHE[jobId];
 
     if (struct) {
         renderStructuredView(struct);
     } else {
-        // Show image + "AI解析" button
-        const job = JOBS_DATA.find(j => j.job_id === jobId);
         content.innerHTML = `
-            <div class="text-center py-8">
-                <img src="/image/${jobId}/0" class="max-h-96 mx-auto rounded-lg shadow mb-4" alt="Page">
+            <div class="text-center py-12">
                 <p class="text-gray-500 text-sm mb-4">AI解析を実行して構造化データを生成してください</p>
                 <button onclick="analyzeOne('${jobId}')" class="px-6 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 text-sm font-medium">
                     AI解析
