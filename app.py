@@ -541,18 +541,26 @@ def consultation_ai_analyze(batch_id):
     if not job or job["status"] != "done":
         abort(400)
 
-    try:
-        import base64
-        # 全ページの画像を収集
-        page_images_base64 = []
-        for page_idx in range(len(job["results"])):
-            buf = ocr_engine.get_page_image_jpeg(job_id, page_idx)
-            if buf:
-                page_images_base64.append(base64.b64encode(buf.read()).decode("ascii"))
+    mode = data.get("mode", "ai")  # "ai" or "spatial"
 
-        structured = ai_corrector.extract_consultation_structured(
-            job["results"], page_images_base64
-        )
+    try:
+        if mode == "spatial":
+            import consultation_spatial
+            pages_ocr    = job["results"]
+            pages_shape  = [(img.shape[1], img.shape[0]) for img in job.get("images", [])]
+            if not pages_shape:
+                pages_shape = [(2480, 3508)] * len(pages_ocr)  # A4 @ 300dpi fallback
+            structured = consultation_spatial.extract_by_position_pages(pages_ocr, pages_shape)
+        else:
+            import base64
+            page_images_base64 = []
+            for page_idx in range(len(job["results"])):
+                buf = ocr_engine.get_page_image_jpeg(job_id, page_idx)
+                if buf:
+                    page_images_base64.append(base64.b64encode(buf.read()).decode("ascii"))
+            structured = ai_corrector.extract_consultation_structured(
+                job["results"], page_images_base64
+            )
 
         # Save structured data to batch
         with ocr_engine.batches_lock:
