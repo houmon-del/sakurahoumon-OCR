@@ -39,84 +39,23 @@ def _para_center(bbox):
     return (bbox[0] + bbox[2]) / 2, (bbox[1] + bbox[3]) / 2
 
 
-def _estimate_transform(ocr_paragraphs, cell_map, img_w, img_h):
+def _para_to_rel(bbox, img_w, img_h):
+    """スキャンbbox [x1,y1,x2,y2] → 相対座標 [0-1]"""
+    return [bbox[0]/img_w, bbox[1]/img_h, bbox[2]/img_w, bbox[3]/img_h]
+
+
+def _overlap_ratio_rel(para_rel, cell_rel):
     """
-    スキャン座標 → テンプレート座標 の (scale_x, scale_y, offset_x, offset_y) を推定。
-
-    まずアンカーラベルで精密推定を試みる。
-    失敗した場合はページサイズ比率から簡易推定。
-
-    返り値: (sx, sy, ox, oy)
-        template_x = scan_x * sx + ox
-        template_y = scan_y * sy + oy
+    相対座標同士の重複率。
+    重複面積 / パラグラフ面積 で正規化。
     """
-    cmap = cell_map
-    anchors = cmap["anchors"]
-
-    # --- アンカーラベルマッチング ---
-    scan_pts  = []   # (scan_cx, scan_cy)
-    tmpl_pts  = []   # (tmpl_cx, tmpl_cy)
-
-    for anchor in anchors:
-        text = anchor["text"]
-        tbbox = anchor["bbox"]
-        tcx = (tbbox[0] + tbbox[2]) / 2
-        tcy = (tbbox[1] + tbbox[3]) / 2
-
-        # OCRパラグラフからラベルテキストを探す
-        for para in ocr_paragraphs:
-            if para.get("contents") and text in para["contents"]:
-                b = para["box"]  # [x1,y1,x2,y2]
-                scx = (b[0] + b[2]) / 2
-                scy = (b[1] + b[3]) / 2
-                scan_pts.append((scx, scy))
-                tmpl_pts.append((tcx, tcy))
-                break
-
-    if len(scan_pts) >= 3:
-        # 最小二乗でスケール・オフセットを推定（回転は無視）
-        import numpy as np
-        SP = np.array(scan_pts)
-        TP = np.array(tmpl_pts)
-        sx = float(np.mean(TP[:, 0] / (SP[:, 0] + 1e-9)))
-        sy = float(np.mean(TP[:, 1] / (SP[:, 1] + 1e-9)))
-        ox = float(np.mean(TP[:, 0] - SP[:, 0] * sx))
-        oy = float(np.mean(TP[:, 1] - SP[:, 1] * sy))
-        return sx, sy, ox, oy
-
-    # --- フォールバック: ページサイズ比率 ---
-    tw = cmap["template_w"]
-    th = cmap["template_h"]
-    sx = tw / max(img_w, 1)
-    sy = th / max(img_h, 1)
-    return sx, sy, 0.0, 0.0
-
-
-def _to_template(bbox_scan, sx, sy, ox, oy):
-    """スキャンbbox → テンプレート座標bbox"""
-    x1, y1, x2, y2 = bbox_scan
-    return [x1*sx+ox, y1*sy+oy, x2*sx+ox, y2*sy+oy]
-
-
-def _iou_1d(a1, a2, b1, b2):
-    """1次元のオーバーラップ比率 (intersection / union)"""
-    inter = max(0, min(a2, b2) - max(a1, b1))
-    union = max(a2, b2) - min(a1, b1)
-    return inter / union if union > 0 else 0
-
-
-def _overlap_ratio(para_bbox, cell_bbox):
-    """
-    パラグラフbboxとセルbboxの重複率を返す。
-    重複面積 / パラグラフ面積 で正規化（セルが小さくても大きくてもパラグラフ基準）
-    """
-    px1, py1, px2, py2 = para_bbox
-    cx1, cy1, cx2, cy2 = cell_bbox
+    px1, py1, px2, py2 = para_rel
+    cx1, cy1, cx2, cy2 = cell_rel
 
     ix = max(0, min(px2, cx2) - max(px1, cx1))
     iy = max(0, min(py2, cy2) - max(py1, cy1))
     inter = ix * iy
-    para_area = max(1, (px2-px1) * (py2-py1))
+    para_area = max(1e-9, (px2-px1) * (py2-py1))
     return inter / para_area
 
 
@@ -127,44 +66,63 @@ def _overlap_ratio(para_bbox, cell_bbox):
 OVERLAP_THRESHOLD = 0.4   # パラグラフ面積の40%以上がセル内なら割り当て
 
 
-def _assign_paragraphs(ocr_paragraphs, cell_map, sx, sy, ox, oy):
-    """
-    各OCRパラグラフを最も重複するデータセルに割り当てる。
+def _word_to_bbox(word):
+    """WordPrediction.points ([[x,y]×4]) → [x1,y1,x2,y2]"""
+    pts = word["points"]
+    xs = [p[0] for p in pts]
+    ys = [p[1] for p in pts]
+    return [min(xs), min(ys), max(xs), max(ys)]
 
-    返り値: dict { field_path: [text, ...] }
+
+def _assign_items(items, cell_map, img_w, img_h):
+    """
+    OCRアイテム（wordsまたはparagraphs）を最も重複するデータセルに割り当てる。
+
+    返り値: dict { field_path: [(x_center, text), ...] }  ← X座標つきで保持
     """
     assignments = {}
 
-    for para in ocr_paragraphs:
-        text = para.get("contents", "") or ""
+    for item in items:
+        # words と paragraphs で構造が異なる
+        if "points" in item:
+            text = item.get("content", "") or ""
+            bbox = _word_to_bbox(item)
+        else:
+            text = item.get("contents", "") or ""
+            bbox = item["box"]
+
         text = text.strip()
         if not text:
             continue
 
-        pbbox_tmpl = _to_template(para["box"], sx, sy, ox, oy)
+        item_rel = _para_to_rel(bbox, img_w, img_h)
+        cx = (item_rel[0] + item_rel[2]) / 2
 
         best_field = None
         best_overlap = OVERLAP_THRESHOLD
 
-        # データフィールドとの重複確認
         for entry in cell_map["fields"]:
-            ov = _overlap_ratio(pbbox_tmpl, entry["bbox"])
+            ov = _overlap_ratio_rel(item_rel, entry["rel"])
             if ov > best_overlap:
                 best_overlap = ov
                 best_field = entry["field"]
 
-        # スケジュールセルとの重複確認
         if best_field is None:
             for entry in cell_map["schedule"]:
-                ov = _overlap_ratio(pbbox_tmpl, entry["bbox"])
+                ov = _overlap_ratio_rel(item_rel, entry["rel"])
                 if ov > best_overlap:
                     best_overlap = ov
                     best_field = f"schedule.{entry['slot']}.{entry['day']}"
 
         if best_field:
-            assignments.setdefault(best_field, []).append(text)
+            assignments.setdefault(best_field, []).append((cx, text))
 
-    return assignments
+    # X座標でソートして結合
+    result = {}
+    for field, items_list in assignments.items():
+        items_list.sort(key=lambda t: t[0])
+        result[field] = [t[1] for t in items_list]
+    return result
 
 
 # ────────────────────────────────────────────────────────────────
@@ -308,10 +266,10 @@ def extract_by_position(ocr_result_dict, img_w, img_h):
         structured dict (consultation_xlsx.fill_template() と同形式)
     """
     cmap = _load_cell_map()
-    paragraphs = ocr_result_dict.get("paragraphs", [])
+    # wordsを優先（段落より細粒度）、なければparagraphsにフォールバック
+    items = ocr_result_dict.get("words") or ocr_result_dict.get("paragraphs", [])
 
-    sx, sy, ox, oy = _estimate_transform(paragraphs, cmap, img_w, img_h)
-    assignments = _assign_paragraphs(paragraphs, cmap, sx, sy, ox, oy)
+    assignments = _assign_items(items, cmap, img_w, img_h)
     return _to_structured(assignments)
 
 

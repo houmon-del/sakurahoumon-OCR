@@ -88,6 +88,69 @@ ANCHOR_LABELS = [
     ("依頼者",   "B32"),
 ]
 
+# ──────────────────────────────────────────────
+# 実測キャリブレーション済みセル座標
+# （実際のA4スキャン @ 300dpi で観測した相対座標）
+# Excelのメタデータでは印刷スケールが合わないため、
+# 実スキャン上の位置を直接定義する。
+# ──────────────────────────────────────────────
+CALIBRATED_FIELDS = [
+    # field_path,               [x1_rel, y1_rel, x2_rel, y2_rel]
+    ("patient.furigana",         [0.15, 0.135, 0.41, 0.170]),
+    ("patient.name",             [0.15, 0.160, 0.41, 0.200]),
+    ("patient.gender",           [0.44, 0.140, 0.47, 0.205]),
+    ("patient.dob_era",          [0.55, 0.140, 0.70, 0.180]),
+    ("patient.dob_year",         [0.68, 0.140, 0.88, 0.175]),
+    ("patient.dob_month",        [0.83, 0.140, 0.94, 0.175]),
+    ("patient.dob_day",          [0.92, 0.140, 0.99, 0.175]),
+    ("patient.age",              [0.70, 0.165, 0.99, 0.205]),
+    ("patient.address",          [0.15, 0.193, 0.58, 0.228]),
+    ("patient.room",             [0.35, 0.222, 0.62, 0.255]),
+    ("contact.home_phone",       [0.23, 0.250, 0.50, 0.285]),
+    ("contact.mobile_phone",     [0.23, 0.272, 0.50, 0.308]),
+    ("insurance.burden_ratio",   [0.48, 0.263, 0.62, 0.305]),
+    ("insurance.public_expense", [0.62, 0.250, 0.76, 0.295]),
+    ("insurance.care_level",     [0.68, 0.268, 0.90, 0.305]),
+    ("medical_history.text",     [0.15, 0.295, 0.98, 0.370]),
+    ("infection.text",           [0.15, 0.350, 0.80, 0.390]),
+    ("physician.hospital",       [0.15, 0.368, 0.72, 0.408]),
+    ("physician.doctor",         [0.60, 0.368, 0.92, 0.408]),
+    ("communication",            [0.15, 0.395, 0.98, 0.430]),
+    ("diet.type",                [0.15, 0.415, 0.55, 0.450]),
+    ("requester.type",           [0.15, 0.560, 0.55, 0.592]),
+    ("requester.name_phone",     [0.55, 0.560, 0.98, 0.592]),
+    ("key_person.furigana",      [0.27, 0.578, 0.52, 0.615]),
+    ("key_person.relationship",  [0.60, 0.578, 0.92, 0.638]),
+    ("key_person.name",          [0.27, 0.595, 0.52, 0.632]),
+    ("key_person.phone",         [0.60, 0.617, 0.92, 0.653]),
+    ("key_person.address",       [0.15, 0.635, 0.55, 0.675]),
+    ("care_manager.furigana",    [0.15, 0.683, 0.52, 0.718]),
+    ("care_manager.phone",       [0.60, 0.683, 0.90, 0.720]),
+    ("care_manager.name",        [0.15, 0.710, 0.52, 0.732]),
+    ("care_manager.facility",    [0.15, 0.730, 0.52, 0.758]),
+    ("care_manager.fax",         [0.60, 0.718, 0.90, 0.758]),
+    ("notes",                    [0.07, 0.818, 0.65, 0.858]),
+    ("referral_source",          [0.07, 0.858, 0.78, 0.900]),
+]
+
+# スケジュールセルのキャリブレーション済み座標
+# AM行: y≈0.497-0.524, PM行: y≈0.518-0.547
+# 日〜土の各列X座標（各dayの中心x_relから±0.025）
+CALIBRATED_SCHEDULE = []
+_day_x = {"日": 0.210, "月": 0.325, "火": 0.427, "水": 0.531,
+          "木": 0.638, "金": 0.733, "土": 0.844}
+for _day, _cx in _day_x.items():
+    CALIBRATED_SCHEDULE.append({
+        "slot": "am", "day": _day,
+        "cell": SCHEDULE_CELLS[("am", _day)],
+        "rel": [_cx-0.028, 0.492, _cx+0.028, 0.527],
+    })
+    CALIBRATED_SCHEDULE.append({
+        "slot": "pm", "day": _day,
+        "cell": SCHEDULE_CELLS[("pm", _day)],
+        "rel": [_cx-0.028, 0.515, _cx+0.028, 0.550],
+    })
+
 
 def col_width_to_px(w, dpi=BASE_DPI):
     if w is None or w == 0:
@@ -146,30 +209,31 @@ def generate():
     total_w = col_x[ws.max_column]
     total_h = row_y[ws.max_row]
 
-    # データフィールドのbbox
+    def to_rel(bbox):
+        """ピクセルbbox → 相対座標 [0-1] に変換（印刷スケールに依存しない）"""
+        x1, y1, x2, y2 = bbox
+        return [x1/total_w, y1/total_h, x2/total_w, y2/total_h]
+
+    # データフィールドのbbox — キャリブレーション済み座標を優先使用
+    calib_map = {f: rel for f, rel in CALIBRATED_FIELDS}
     fields = []
     for field_path, cell in DATA_FIELDS:
-        extent = get_merge_extent(ws, cell)
-        bbox   = cell_to_bbox(col_x, row_y, *extent)
+        if field_path in calib_map:
+            rel = calib_map[field_path]
+        else:
+            extent = get_merge_extent(ws, cell)
+            bbox   = cell_to_bbox(col_x, row_y, *extent)
+            rel    = to_rel(bbox)
         fields.append({
             "field": field_path,
             "cell":  cell,
-            "bbox":  bbox,   # [x1, y1, x2, y2] in template pixels @ BASE_DPI
+            "rel":   rel,
         })
 
-    # スケジュールセルのbbox
-    schedule = []
-    for (slot, day), cell in SCHEDULE_CELLS.items():
-        extent = get_merge_extent(ws, cell)
-        bbox   = cell_to_bbox(col_x, row_y, *extent)
-        schedule.append({
-            "slot": slot,
-            "day":  day,
-            "cell": cell,
-            "bbox": bbox,
-        })
+    # スケジュールセルのbbox — キャリブレーション済み
+    schedule = list(CALIBRATED_SCHEDULE)
 
-    # アンカーラベルのbbox（位置合わせ用）
+    # アンカーラベルのbbox（相対座標）
     anchors = []
     for label_text, cell in ANCHOR_LABELS:
         extent = get_merge_extent(ws, cell)
@@ -177,7 +241,7 @@ def generate():
         anchors.append({
             "text": label_text,
             "cell": cell,
-            "bbox": bbox,
+            "rel":  to_rel(bbox),
         })
 
     cell_map = {

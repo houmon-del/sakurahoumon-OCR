@@ -96,14 +96,14 @@ def fill_template(structured: dict) -> bytes:
     dob_year = p.get("dob_year", "")
     dob_mon  = p.get("dob_month", "")
     dob_day  = p.get("dob_day", "")
-    if dob_era:  _w(ws, "V5",  dob_era)
+    if dob_era:  _w(ws, "U5",  dob_era)   # U5:X7マージの左上
     if dob_year: _w(ws, "AB5", dob_year)
     if dob_mon:  _w(ws, "AE5", dob_mon)
     if dob_day:  _w(ws, "AH5", dob_day)
 
-    # 年齢
+    # 年齢（Y7:AG7マージ — U5と別セル）
     if p.get("age"):
-        _w(ws, "W7", p["age"])
+        _w(ws, "Y7", f'({p["age"]}歳）')
 
     # 住所（〒 + 住所）
     addr_parts = []
@@ -163,10 +163,10 @@ def fill_template(structured: dict) -> bytes:
             if cell_addr and val:
                 _w(ws, cell_addr, val)
 
-    # ── 依頼者 ──
-    if req.get("type"):  _w(ws, "H32", req["type"])
-    if req.get("name"):  _w(ws, "V32", req["name"])
-    if req.get("phone"): _w(ws, "AC32", req["phone"])
+    # ── 依頼者 ── （名前・電話はV32:AF32の同一マージセル）
+    if req.get("type"):  _w(ws, "G32", req["type"])
+    req_parts = [x for x in [req.get("name"), req.get("phone")] if x]
+    if req_parts: _w(ws, "V32", "　".join(req_parts))
 
     # ── キーパーソン ──
     kp_furi = kp.get("furigana", "")
