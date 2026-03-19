@@ -21,7 +21,7 @@
     .field-value.modified { border-left: 3px solid #f59e0b; padding-left: 4px; }
     .section-card { border: 1px solid #e5e7eb; border-radius: 8px; margin-bottom: 12px; overflow: hidden; }
     .section-header { background: #f8fafc; padding: 8px 12px; font-weight: 600; font-size: 0.875rem; border-bottom: 1px solid #e5e7eb; }
-    .condition-tag { display: inline-block; padding: 2px 8px; margin: 2px; border-radius: 4px; font-size: 0.8rem; }
+    .condition-tag { display: inline-flex; align-items: center; padding: 2px 8px; margin: 2px; border-radius: 4px; font-size: 0.8rem; }
     .condition-checked { background-color: #dcfce7; color: #166534; border: 1px solid #86efac; }
     .schedule-grid { width: 100%; border-collapse: collapse; font-size: 0.8rem; }
     .schedule-grid th, .schedule-grid td { border: 1px solid #e2e8f0; padding: 4px 10px; text-align: center; }
@@ -38,6 +38,10 @@
         <button id="analyze-all-btn"
                 class="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 text-sm font-medium">
             全件AI解析
+        </button>
+        <button id="export-xlsx-btn" disabled
+                class="px-4 py-2 bg-orange-500 text-white rounded-lg hover:bg-orange-600 text-sm font-medium disabled:opacity-40 disabled:cursor-not-allowed">
+            相談シートXLS出力
         </button>
         <button id="export-csv-btn"
                 class="px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 text-sm font-medium">

@@ -80,6 +80,14 @@ function selectPatient(jobId) {
 
     if (struct) {
         renderStructuredView(struct);
+        // Excel出力ボタンを更新
+        const xlsxBtn = document.getElementById('export-xlsx-btn');
+        if (xlsxBtn) {
+            xlsxBtn.onclick = () => {
+                window.location.href = `/consultation/${BATCH_ID}/export-xlsx/${jobId}`;
+            };
+            xlsxBtn.disabled = false;
+        }
     } else {
         content.innerHTML = `
             <div class="text-center py-12">
@@ -205,13 +213,20 @@ function renderStructuredView(data) {
     ]);
 
     // 既往歴
-    const conditions = (mh.conditions || []).map(c =>
-        `<span class="condition-tag condition-checked">${escapeHtml(c)}</span>`
+    const condTags = (mh.conditions || []).map((item, i) =>
+        `<span class="condition-tag condition-checked">
+            ${escapeHtml(item)}<button onclick="removeTag('medical_history.conditions',${i})" class="ml-1 text-xs opacity-50 hover:opacity-100 focus:outline-none leading-none">×</button>
+        </span>`
     ).join('');
-    const otherMH = mh.other ? `<div class="mt-1 text-sm text-blue-700">その他: ${escapeHtml(mh.other)}</div>` : '';
+    const condEmpty = !mh.conditions || mh.conditions.length === 0 ? '<span class="text-gray-400 text-sm mr-2">なし</span>' : '';
     html += `<div class="section-card">
         <div class="section-header">既往歴</div>
-        <div class="p-3">${conditions || '<span class="text-gray-400 text-sm">なし</span>'}${otherMH}</div>
+        <div class="p-3 flex flex-wrap gap-1 items-center border-b border-gray-100">
+            ${condEmpty}${condTags}
+            <input type="text" placeholder="＋ 追加" onkeydown="addTag(event,'medical_history.conditions')"
+                   class="text-xs border border-gray-200 rounded px-2 py-0.5 w-20 focus:outline-none focus:border-indigo-300 mt-1">
+        </div>
+        <div class="field-row"><span class="field-label">その他</span><span class="field-value editable" data-path="medical_history.other">${escapeHtml(mh.other || '')}</span></div>
     </div>`;
 
     // 感染症
@@ -233,8 +248,8 @@ function renderStructuredView(data) {
         field('誤嚥性肺炎', diet.aspiration_pneumonia || '', 'diet.aspiration_pneumonia'),
     ]);
 
-    // 訪問可能曜日
-    if (sched.am || sched.pm) {
+    // 訪問可能曜日（常に表示・編集可能）
+    {
         const days = ['日','月','火','水','木','金','土'];
         let schedHtml = '<table class="schedule-grid"><thead><tr><th></th>';
         days.forEach(d => schedHtml += `<th>${d}</th>`);
@@ -246,14 +261,15 @@ function renderStructuredView(data) {
             days.forEach(d => {
                 const v = (sched[slot] || {})[d] || '';
                 const cls = (v === '○' || v === '◎') ? 'mark-ok' : (v === '×' ? 'mark-ng' : '');
-                schedHtml += `<td class="${cls}">${escapeHtml(v)}</td>`;
+                schedHtml += `<td class="${cls} schedule-cell cursor-pointer select-none hover:bg-indigo-50"
+                    data-slot="${slot}" data-day="${d}" onclick="toggleSchedule(this)">${escapeHtml(v)}</td>`;
             });
             schedHtml += '</tr>';
         });
         schedHtml += '</tbody></table>';
 
         html += `<div class="section-card">
-            <div class="section-header">訪問可能曜日</div>
+            <div class="section-header">訪問可能曜日 <span class="font-normal text-xs text-gray-400">（クリックで ○/×/空欄 切替）</span></div>
             <div class="p-3">${schedHtml}</div>
         </div>`;
     }
@@ -283,29 +299,13 @@ function renderStructuredView(data) {
     ]);
 
     // 来院理由
-    const reasons = (data.visit_reason || []).map(r =>
-        `<span class="condition-tag condition-checked">${escapeHtml(r)}</span>`
-    ).join('');
-    html += `<div class="section-card">
-        <div class="section-header">来院理由</div>
-        <div class="p-3">${reasons || '<span class="text-gray-400 text-sm">なし</span>'}</div>
-    </div>`;
+    html += tagSection('来院理由', data.visit_reason, 'visit_reason', 'condition-checked');
 
     // 知ったきっかけ
-    const sources = (data.referral_source || []).map(s =>
-        `<span class="condition-tag" style="background:#ede9fe;color:#5b21b6;border:1px solid #c4b5fd">${escapeHtml(s)}</span>`
-    ).join('');
-    html += `<div class="section-card">
-        <div class="section-header">知ったきっかけ</div>
-        <div class="p-3">${sources || '<span class="text-gray-400 text-sm">なし</span>'}</div>
-    </div>`;
+    html += tagSection('知ったきっかけ', data.referral_source, 'referral_source', 'referral');
 
-    if (data.notes) {
-        html += `<div class="section-card">
-            <div class="section-header">備考</div>
-            <div class="p-3 text-sm">${escapeHtml(data.notes)}</div>
-        </div>`;
-    }
+    // 備考
+    html += section('備考', [field('備考', data.notes || '', 'notes')]);
 
     content.innerHTML = html;
 
@@ -315,6 +315,80 @@ function renderStructuredView(data) {
     });
 }
 
+
+function tagSection(title, arr, path, tagClass) {
+    const tags = (arr || []).map((item, i) =>
+        `<span class="condition-tag ${tagClass === 'referral' ? '' : tagClass}" ${tagClass === 'referral' ? 'style="background:#ede9fe;color:#5b21b6;border:1px solid #c4b5fd"' : ''}>
+            ${escapeHtml(item)}<button onclick="removeTag('${path}',${i})" class="ml-1 text-xs opacity-50 hover:opacity-100 focus:outline-none leading-none">×</button>
+        </span>`
+    ).join('');
+    const emptyMsg = !arr || arr.length === 0 ? '<span class="text-gray-400 text-sm mr-2">なし</span>' : '';
+    return `<div class="section-card">
+        <div class="section-header">${escapeHtml(title)}</div>
+        <div class="p-3 flex flex-wrap gap-1 items-center">
+            ${emptyMsg}${tags}
+            <input type="text" placeholder="＋ 追加" onkeydown="addTag(event,'${path}')"
+                   class="text-xs border border-gray-200 rounded px-2 py-0.5 w-20 focus:outline-none focus:border-indigo-300 mt-1">
+        </div>
+    </div>`;
+}
+
+function toggleSchedule(cell) {
+    const slot = cell.dataset.slot;
+    const day  = cell.dataset.day;
+    const cur  = cell.textContent.trim();
+    const next = cur === '' ? '○' : cur === '○' ? '×' : '';
+
+    // Update cache
+    const struct = STRUCTURED_CACHE[selectedJobId];
+    if (!struct.schedule) struct.schedule = {};
+    if (!struct.schedule[slot]) struct.schedule[slot] = {};
+    struct.schedule[slot][day] = next;
+
+    // Update cell appearance
+    cell.textContent = next;
+    cell.className = cell.className.replace(/mark-ok|mark-ng/g, '').trim();
+    if (next === '○') cell.classList.add('mark-ok');
+    else if (next === '×') cell.classList.add('mark-ng');
+
+    saveStructured();
+}
+
+function saveStructured() {
+    fetch(`/consultation/${BATCH_ID}/save-structured`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ job_id: selectedJobId, structured: STRUCTURED_CACHE[selectedJobId] })
+    }).catch(err => console.error('Save failed:', err));
+}
+
+function removeTag(path, index) {
+    const arr = getNestedValue(STRUCTURED_CACHE[selectedJobId], path) || [];
+    arr.splice(index, 1);
+    setNestedValue(STRUCTURED_CACHE[selectedJobId], path, arr);
+    saveAndRerender();
+}
+
+function addTag(event, path) {
+    if (event.key !== 'Enter') return;
+    const val = event.target.value.trim();
+    if (!val) return;
+    const arr = getNestedValue(STRUCTURED_CACHE[selectedJobId], path) || [];
+    arr.push(val);
+    setNestedValue(STRUCTURED_CACHE[selectedJobId], path, arr);
+    event.target.value = '';
+    saveAndRerender();
+}
+
+function getNestedValue(obj, path) {
+    return path.split('.').reduce((o, k) => (o && o[k] !== undefined ? o[k] : undefined), obj);
+}
+
+function saveAndRerender() {
+    const struct = STRUCTURED_CACHE[selectedJobId];
+    renderStructuredView(struct);
+    saveStructured();
+}
 
 function section(title, fieldsHtml) {
     return `<div class="section-card">

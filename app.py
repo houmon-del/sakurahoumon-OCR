@@ -580,6 +580,29 @@ def consultation_save_structured(batch_id):
     return jsonify({"ok": True})
 
 
+@app.route("/consultation/<batch_id>/export-xlsx/<job_id>")
+def consultation_export_xlsx(batch_id, job_id):
+    """相談シートExcelテンプレートに書き込んでダウンロード"""
+    batch = ocr_engine.get_batch(batch_id)
+    if not batch:
+        abort(404)
+    structured = batch["structured"].get(job_id)
+    if not structured:
+        abort(404, "AI解析を先に実行してください")
+
+    import consultation_xlsx
+    xlsx_bytes = consultation_xlsx.fill_template(structured)
+    buf = io.BytesIO(xlsx_bytes)
+    buf.seek(0)
+
+    patient = structured.get("patient", {})
+    name = f"{patient.get('sei','')}{patient.get('mei','')}".strip() or job_id
+    return send_file(buf,
+                     mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                     as_attachment=True,
+                     download_name=f"相談シート_{name}.xlsx")
+
+
 @app.route("/consultation/<batch_id>/export-csv")
 def consultation_export_csv(batch_id):
     """DentNet CSV一括エクスポート"""
