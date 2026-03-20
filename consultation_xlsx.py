@@ -96,10 +96,10 @@ def fill_template(structured: dict) -> bytes:
     dob_year = p.get("dob_year", "")
     dob_mon  = p.get("dob_month", "")
     dob_day  = p.get("dob_day", "")
-    if dob_era:  _w(ws, "U5",  dob_era)   # U5:X7マージの左上
-    if dob_year: _w(ws, "AB5", dob_year)
-    if dob_mon:  _w(ws, "AE5", dob_mon)
-    if dob_day:  _w(ws, "AH5", dob_day)
+    if dob_era:  _w(ws, "U5",  dob_era)   # U5:X7 元号選択
+    if dob_year: _w(ws, "Y5",  dob_year)  # Y5:Z6 年入力欄
+    if dob_mon:  _w(ws, "AB5", dob_mon)   # AB5:AC6 月入力欄
+    if dob_day:  _w(ws, "AE5", dob_day)   # AE5:AF6 日入力欄
 
     # 年齢（Y7:AG7マージ — U5と別セル）
     if p.get("age"):
@@ -124,8 +124,8 @@ def fill_template(structured: dict) -> bytes:
 
     # ── 保険情報 ──
     if ins.get("burden_ratio"):   _w(ws, "S11", f"{ins['burden_ratio']}割")
-    if ins.get("public_expense"): _w(ws, "W11", ins["public_expense"])
-    if ins.get("care_level"):     _w(ws, "S13", ins["care_level"])
+    if ins.get("public_expense"): _w(ws, "Z11", ins["public_expense"])  # Z11:AG12 公費入力欄
+    if ins.get("care_level"):     _w(ws, "Z13", ins["care_level"])       # Z13:AG14 要介護度入力欄
 
     # ── 既往歴 ──
     conditions = mh.get("conditions") or []
@@ -143,8 +143,8 @@ def fill_template(structured: dict) -> bytes:
     if inf_text: _w(ws, "F18", inf_text)
 
     # ── 内科主治医 ──
-    if phy.get("hospital"): _w(ws, "G19", phy["hospital"])
-    if phy.get("doctor"):   _w(ws, "U19", phy["doctor"])
+    if phy.get("hospital"): _w(ws, "I19", phy["hospital"])   # I19:R19 病院名入力欄
+    if phy.get("doctor"):   _w(ws, "W19", phy["doctor"])    # W19:AF19 医師名入力欄
 
     # ── 意思疎通 ──
     if structured.get("communication"): _w(ws, "F21", structured["communication"])
@@ -177,14 +177,14 @@ def fill_template(structured: dict) -> bytes:
     if kp_furi:  _w(ws, "J33", kp_furi)
     if kp_rel:   _w(ws, "W33", kp_rel)
     if kp_name:  _w(ws, "J34", kp_name)
-    if kp_phone: _w(ws, "H35", kp_phone)
-    if kp_addr:  _w(ws, "C36", kp_addr)
+    if kp_phone: _w(ws, "J35", kp_phone)
+    if kp_addr:  _w(ws, "G36", kp_addr)
 
     # ── ケアマネジャー ──
     if cm.get("furigana"): _w(ws, "F40", cm["furigana"])
     if cm.get("phone"):    _w(ws, "W40", cm["phone"])
     if cm.get("name"):     _w(ws, "F41", cm["name"])
-    if cm.get("facility"): _w(ws, "C42", cm["facility"])
+    if cm.get("facility"): _w(ws, "F42", cm["facility"])
     if cm.get("fax"):      _w(ws, "W42", cm["fax"])
 
     # ── 来院理由 ──チェック記入
@@ -199,7 +199,7 @@ def fill_template(structured: dict) -> bytes:
 
     # 備考（メモ欄）
     if structured.get("notes"):
-        _w(ws, "C48", structured["notes"])
+        _w(ws, "E48", structured["notes"])
 
     # ── 知ったきっかけ ──
     referral_sources = structured.get("referral_source") or []
