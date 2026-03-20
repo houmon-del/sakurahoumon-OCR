@@ -24,10 +24,10 @@ steps:
       - '-c'
       - |
         gcloud compute scp /workspace/deploy_gpu.sh sakurahoumon-ocr-gpu:/tmp/deploy_gpu.sh \
-          --zone=us-east1-d --project=$PROJECT_ID
+          --zone=asia-northeast1-c --project=$PROJECT_ID
 
         gcloud compute ssh sakurahoumon-ocr-gpu \
-          --zone=us-east1-d --project=$PROJECT_ID \
+          --zone=asia-northeast1-c --project=$PROJECT_ID \
           --strict-host-key-checking=no \
           --command="bash /tmp/deploy_gpu.sh $PROJECT_ID"
 
